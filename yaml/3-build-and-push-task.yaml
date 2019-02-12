@@ -1,0 +1,78 @@
+apiVersion: pipeline.knative.dev/v1alpha1
+kind: Task
+metadata:
+  name: build-docker-image-from-git-source
+spec:
+  inputs:
+    resources:
+      - name: source
+        type: git
+    params:
+      - name: pathToDockerFile
+        description: The path to the dockerfile to build
+        default: /workspace/source/Dockerfile
+      - name: baseWorkspace
+        description: The path to the base source workspace
+        default: /workspace/source
+      - name: pathToContext
+        description:
+          The build context used by Kaniko
+          (https://github.com/GoogleContainerTools/kaniko#kaniko-build-contexts)
+        default:  /workspace/source
+  outputs:
+    resources:
+      - name: foo-image
+        type: image
+      - name: bar-image
+        type: image
+  steps:
+    - name: warm-cache
+      image: gcr.io/kaniko-project/warmer
+      args:
+        - --cache-dir=/workspace
+        - --image=busybox
+      resources:
+        limits:
+          cpu: 2
+          memory: 4096Mi
+        requests:
+          cpu: 1
+          memory: 2018Mi
+    - name: build-and-push-dlang
+      image: rawlingsj/executor:dev17
+      command:
+        - /kaniko/executor
+      args:
+        - --dockerfile=${inputs.params.baseWorkspace}/foo/Dockerfile
+        - --destination=${outputs.resources.foo-image.url}
+        - --context=${inputs.params.baseWorkspace}/foo
+        - --cache-repo=jenkins-x-docker-registry.jx.svc.cluster.local:5000/
+        - --cache=true
+        - --cache-dir=/workspace
+        - --skip-tls-verify-registry=jenkins-x-docker-registry.jx.svc.cluster.local:5000
+      resources:
+        limits:
+          cpu: 2
+          memory: 4096Mi
+        requests:
+          cpu: 1
+          memory: 2018Mi
+    - name: build-and-push-nodejs
+      image: rawlingsj/executor:dev17
+      command:
+        - /kaniko/executor
+      args:
+        - --dockerfile=${inputs.params.baseWorkspace}/bar/Dockerfile
+        - --destination=${outputs.resources.bar-image.url}
+        - --context=${inputs.params.baseWorkspace}/bar
+        - --cache-repo=jenkins-x-docker-registry.jx.svc.cluster.local:5000/
+        - --cache=true
+        - --cache-dir=/workspace
+        - --skip-tls-verify-registry=jenkins-x-docker-registry.jx.svc.cluster.local:5000
+      resources:
+        limits:
+          cpu: 2
+          memory: 4096Mi
+        requests:
+          cpu: 1
+          memory: 2018Mi
